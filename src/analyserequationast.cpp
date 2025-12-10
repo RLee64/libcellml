@@ -248,23 +248,16 @@ void AnalyserEquationAst::swapLeftAndRightChildren()
     mPimpl->mRightChild = oldLeftChild;
 }
 
-// Note, here we assume that each variable only appears once
-// (and so we don't need to check to make sure duplicates are assigned to the same symbol)
-// TODO fix above
-
 SymEngine::RCP<const SymEngine::Basic> AnalyserEquationAst::getSymEngineRepresentation(const std::map<std::string, SymEngine::RCP<const SymEngine::Symbol>> &symbolMap)
 {
     using namespace SymEngine;
-    if (mPimpl == nullptr) {
-        return null;
-    }
 
     AnalyserEquationAstPtr leftAst = leftChild();
     AnalyserEquationAstPtr rightAst = rightChild();
 
     // Recursively call getConvertedAst on left and right children
-    RCP<const Basic> left = leftAst->getSymEngineRepresentation(symbolMap);
-    RCP<const Basic> right = rightAst->getSymEngineRepresentation(symbolMap);
+    RCP<const Basic> left = leftAst != nullptr ? leftAst->getSymEngineRepresentation(symbolMap) : null;
+    RCP<const Basic> right = rightAst != nullptr ? rightAst->getSymEngineRepresentation(symbolMap) : null;
 
     // Analyse mAst current type and value
     switch (mPimpl->mType) {
@@ -272,16 +265,8 @@ SymEngine::RCP<const SymEngine::Basic> AnalyserEquationAst::getSymEngineRepresen
         return Eq(left, right);
     case AnalyserEquationAst::Type::PLUS:
         return add(left, right);
-    // case AnalyserEquationAst::Type::MINUS:
-    //     return sub(left, right);
-    // case AnalyserEquationAst::Type::TIMES:
-    //     return mul(left, right);
-    // case AnalyserEquationAst::Type::DIVIDE:
-    //     return div(left, right);
     case AnalyserEquationAst::Type::CI:
         return symbolMap.at(variable()->name());
-    // case AnalyserEquationAst::Type::CN:
-    //     return real_double(std::stod(value()));
     default:
         return null;
     }

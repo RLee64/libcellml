@@ -225,17 +225,15 @@ AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(SymEng
         RCP<const Symbol> symbolExpr = rcp_dynamic_cast<const Symbol>(expr);
         ast->setType(AnalyserEquationAst::Type::CI);
         ast->setVariable(astMap.at(symbolExpr)->mVariable);
+        break;
     }
-    // case SYMENGINE_REAL_DOUBLE: {
-    //     auto realExpr = rcp_dynamic_cast<const RealDouble>(expr);
-    //     ast->setType(AnalyserEquationAst::Type::CN);
-    //     ast->setValue(std::to_string(realExpr->as_double()));
-    // }
     default:
         break;
     }
 
-    // Assume two children max (which is wrong, but good enough for now)
+    // Assume two children max
+    // Which is likely wrong since SYMENGINE_ADD could have x + y + z (and thus 3 children)
+    // But it's sufficient for this very early implementation
     if (children.size() > 0) {
         ast->setLeftChild(parseSymEngineExpression(children[0], astMap));
         if (children.size() > 1) {
@@ -246,8 +244,7 @@ AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(SymEng
     return ast;
 }
 
-AnalyserEquationAstPtr
-AnalyserInternalEquation::rearrange(const AnalyserInternalVariablePtr &variable)
+AnalyserEquationAstPtr AnalyserInternalEquation::rearrange(const AnalyserInternalVariablePtr &variable)
 {
     using namespace SymEngine;
     std::map<std::string, RCP<const Symbol>> symbolMap;
