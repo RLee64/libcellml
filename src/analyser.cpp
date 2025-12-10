@@ -22,6 +22,7 @@ limitations under the License.
 
 #include <cmath>
 #include <iterator>
+#include <symengine/solve.h>
 
 #include "libcellml/analyserequation.h"
 #include "libcellml/analyserexternalvariable.h"
@@ -198,6 +199,95 @@ bool AnalyserInternalEquation::variableOnLhsOrRhs(const AnalyserInternalVariable
            || variableOnRhs(variable);
 }
 
+AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(const SymEngine::RCP<const SymEngine::Basic> &expr,
+                                                                          const std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr> &astMap)
+{
+    using namespace SymEngine;
+
+    auto children = expr->get_args();
+
+    AnalyserEquationAstPtr ast = AnalyserEquationAst::create();
+
+    switch (expr->get_type_code()) {
+    case SYMENGINE_EQUALITY: {
+        ast->setType(AnalyserEquationAst::Type::EQUALITY);
+        break;
+    }
+    case SYMENGINE_ADD: {
+        ast->setType(AnalyserEquationAst::Type::PLUS);
+        break;
+    }
+    case SYMENGINE_MUL: {
+        ast->setType(AnalyserEquationAst::Type::TIMES);
+        break;
+    }
+    case SYMENGINE_SYMBOL: {
+        auto symbolExpr = rcp_dynamic_cast<const Symbol>(expr);
+        ast->setType(AnalyserEquationAst::Type::CI);
+        ast->setVariable(astMap.at(symbolExpr)->mVariable);
+    }
+    // case SYMENGINE_REAL_DOUBLE: {
+    //     auto realExpr = rcp_dynamic_cast<const RealDouble>(expr);
+    //     ast->setType(AnalyserEquationAst::Type::CN);
+    //     ast->setValue(std::to_string(realExpr->as_double()));
+    // }
+    default:
+        break;
+    }
+
+    // Assume two children max (which is wrong, but good enough for now)
+    if (children.size() > 0) {
+        ast->setLeftChild(parseSymEngineExpression(children[0], astMap));
+        if (children.size() > 1) {
+            ast->setRightChild(parseSymEngineExpression(children[1], astMap));
+        }
+    }
+
+    return ast;
+}
+
+AnalyserEquationAstPtr
+AnalyserInternalEquation::rearrange(const AnalyserInternalVariablePtr &variable)
+{
+    using namespace SymEngine;
+    std::map<std::string, RCP<const Symbol>> symbolMap;
+    std::map<RCP<const Symbol>, AnalyserInternalVariablePtr> astMap;
+
+    for (const auto &var : mAllVariables) {
+        auto sym = symbol(var->mVariable->name());
+        symbolMap[var->mVariable->name()] = sym;
+        astMap[sym] = var;
+    }
+
+    RCP<const Basic> equation = mAst->getSymEngineRepresentation(symbolMap);
+    RCP<const Set> solutionSet = solve(equation, symbolMap[variable->mVariable->name()]);
+
+    vec_basic solutions = solutionSet->get_args();
+
+    // Our system needs to be able to isolate a single solution
+    if (solutions.size() != 1) {
+        return nullptr;
+    }
+    RCP<const Basic> answer = solutions.front();
+
+    // Rebuild the AST from the rearranged expression
+    AnalyserEquationAstPtr ast = AnalyserEquationAst::create();
+    AnalyserEquationAstPtr isolatedVariableAst = AnalyserEquationAst::create();
+    AnalyserEquationAstPtr rearrangedEquationAst = parseSymEngineExpression(answer, astMap);
+
+    ast->setType(AnalyserEquationAst::Type::EQUALITY);
+    ast->setLeftChild(isolatedVariableAst);
+    ast->setRightChild(rearrangedEquationAst);
+
+    isolatedVariableAst->setType(AnalyserEquationAst::Type::CI);
+    isolatedVariableAst->setVariable(variable->mVariable);
+    isolatedVariableAst->setParent(ast);
+
+    rearrangedEquationAst->setParent(ast);
+
+    return ast;
+}
+
 bool AnalyserInternalEquation::check(const AnalyserModelPtr &analyserModel, bool checkNlaSystems)
 {
     // Nothing to check if the equation has a known type.
@@ -277,6 +367,14 @@ bool AnalyserInternalEquation::check(const AnalyserModelPtr &analyserModel, bool
                                    mStateVariables.front() :
                                    mVariables.front() :
                                    nullptr;
+
+    // If we have one variable left, but it's not isolated, try to rearrange it
+    if ((unknownVariableLeft != nullptr) && !variableOnLhsOrRhs(unknownVariableLeft)) {
+        auto newAst = rearrange(unknownVariableLeft);
+        if (newAst != nullptr) {
+            mAst = newAst;
+        }
+    }
 
     if (((unknownVariableLeft != nullptr)
          && (checkNlaSystems || variableOnLhsOrRhs(unknownVariableLeft)))

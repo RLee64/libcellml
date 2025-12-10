@@ -201,6 +201,12 @@ else()
   target_include_directories(cellml PUBLIC ${ZLIB_INCLUDE_DIRS})
 endif()
 
+target_link_libraries(cellml PUBLIC "C:/symengine/lib/symengine.lib")
+target_include_directories(cellml PUBLIC "C:/symengine/include")
+
+target_link_libraries(cellml PUBLIC "C:/gmp/lib/gmp.lib")
+target_include_directories(cellml PUBLIC "C:/gmp/include")
+
 apply_libxml2_settings(cellml)
 
 # Use target compile features to propagate features to consuming projects.
