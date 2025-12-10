@@ -199,8 +199,8 @@ bool AnalyserInternalEquation::variableOnLhsOrRhs(const AnalyserInternalVariable
            || variableOnRhs(variable);
 }
 
-AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(const SymEngine::RCP<const SymEngine::Basic> &expr,
-                                                                          const std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr> &astMap)
+AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(SymEngine::RCP<const SymEngine::Basic> &expr,
+                                                                          std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, RCPPtrLess> &astMap)
 {
     using namespace SymEngine;
 
@@ -222,7 +222,7 @@ AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(const 
         break;
     }
     case SYMENGINE_SYMBOL: {
-        auto symbolExpr = rcp_dynamic_cast<const Symbol>(expr);
+        RCP<const Symbol> symbolExpr = rcp_dynamic_cast<const Symbol>(expr);
         ast->setType(AnalyserEquationAst::Type::CI);
         ast->setVariable(astMap.at(symbolExpr)->mVariable);
     }
@@ -251,10 +251,10 @@ AnalyserInternalEquation::rearrange(const AnalyserInternalVariablePtr &variable)
 {
     using namespace SymEngine;
     std::map<std::string, RCP<const Symbol>> symbolMap;
-    std::map<RCP<const Symbol>, AnalyserInternalVariablePtr> astMap;
+    std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, RCPPtrLess> astMap;
 
     for (const auto &var : mAllVariables) {
-        auto sym = symbol(var->mVariable->name());
+        RCP<const Symbol> sym = symbol(var->mVariable->name());
         symbolMap[var->mVariable->name()] = sym;
         astMap[sym] = var;
     }

@@ -146,12 +146,12 @@ if(LIBCELLML_COVERAGE OR LIBCELLML_MEMCHECK)
 endif()
 
 # TWAE ==> LIBCELLML_TREAT_WARNINGS_AS_ERRORS -- Note: This excludes third party code, where warnings are never treated as errors.
-set(_PARAM_ANNOTATION "Treat warnings as errors, this setting applies only to compilation units built by this project.")
-set(LIBCELLML_TREAT_WARNINGS_AS_ERRORS ON CACHE BOOL "${_PARAM_ANNOTATION}")
-if(DEFINED TWAE)
-  set(LIBCELLML_TREAT_WARNINGS_AS_ERRORS "${TWAE}" CACHE BOOL "${_PARAM_ANNOTATION}" FORCE)
-endif()
-unset(TWAE CACHE)
+#set(_PARAM_ANNOTATION "Treat warnings as errors, this setting applies only to compilation units built by this project.")
+#set(LIBCELLML_TREAT_WARNINGS_AS_ERRORS ON CACHE BOOL "${_PARAM_ANNOTATION}")
+#if(DEFINED TWAE)
+#  set(LIBCELLML_TREAT_WARNINGS_AS_ERRORS "${TWAE}" CACHE BOOL "${_PARAM_ANNOTATION}" FORCE)
+#endif()
+#unset(TWAE CACHE)
 
 # BUILD_TYPE ==> LIBCELLML_BUILD_TYPE
 if(NOT IS_MULTI_CONFIG)

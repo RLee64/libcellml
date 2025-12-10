@@ -263,8 +263,8 @@ SymEngine::RCP<const SymEngine::Basic> AnalyserEquationAst::getSymEngineRepresen
     AnalyserEquationAstPtr rightAst = rightChild();
 
     // Recursively call getConvertedAst on left and right children
-    RCP<const Basic> left = leftAst->mPimpl->getSymEngineRepresentation();
-    RCP<const Basic> right = rightAst->mPimpl->getSymEngineRepresentation();
+    RCP<const Basic> left = leftAst->getSymEngineRepresentation(symbolMap);
+    RCP<const Basic> right = rightAst->getSymEngineRepresentation(symbolMap);
 
     // Analyse mAst current type and value
     switch (mPimpl->mType) {

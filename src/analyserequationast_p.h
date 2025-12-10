@@ -16,8 +16,6 @@ limitations under the License.
 
 #pragma once
 
-#include <symengine/solve.h>
-
 #include "libcellml/analyserequationast.h"
 
 #include "internaltypes.h"
@@ -46,8 +44,6 @@ struct AnalyserEquationAst::AnalyserEquationAstImpl
                   const AnalyserEquationAstPtr &parent);
     void populate(AnalyserEquationAst::Type type, const VariablePtr &variable,
                   const AnalyserEquationAstPtr &parent);
-
-    SymEngine::RCP<const SymEngine::Basic> getSymEngineRepresentation();
 };
 
 } // namespace libcellml

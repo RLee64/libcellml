@@ -16,8 +16,16 @@ limitations under the License.
 
 #pragma once
 
+#include <map>
+
 #include "libcellml/analyser.h"
 #include "libcellml/undefines.h"
+
+namespace SymEngine {
+template<class T> class RCP;
+class Basic;
+class Symbol;
+} // namespace SymEngine
 
 namespace libcellml {
 
