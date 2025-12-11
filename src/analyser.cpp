@@ -201,12 +201,16 @@ bool AnalyserInternalEquation::variableOnLhsOrRhs(const AnalyserInternalVariable
 
 SymEngine::RCP<const SymEngine::Basic> AnalyserInternalEquation::getSymEngineRepresentation(AnalyserEquationAstPtr ast, const std::map<std::string, SymEngine::RCP<const SymEngine::Symbol>> &symbolMap)
 {
+    if (ast == nullptr) {
+        return SymEngine::null;
+    }
+
     AnalyserEquationAstPtr leftAst = ast->leftChild();
     AnalyserEquationAstPtr rightAst = ast->rightChild();
 
     // Recursively call getConvertedAst on left and right children
-    SymEngine::RCP<const SymEngine::Basic> left = leftAst != nullptr ? getSymEngineRepresentation(leftAst, symbolMap) : SymEngine::null;
-    SymEngine::RCP<const SymEngine::Basic> right = rightAst != nullptr ? getSymEngineRepresentation(rightAst, symbolMap) : SymEngine::null;
+    SymEngine::RCP<const SymEngine::Basic> left = getSymEngineRepresentation(leftAst, symbolMap);
+    SymEngine::RCP<const SymEngine::Basic> right = getSymEngineRepresentation(rightAst, symbolMap);
 
     // Analyse mAst current type and value
     switch (ast->type()) {
@@ -215,9 +219,15 @@ SymEngine::RCP<const SymEngine::Basic> AnalyserInternalEquation::getSymEngineRep
     case AnalyserEquationAst::Type::PLUS:
         return add(left, right);
     case AnalyserEquationAst::Type::CI:
+        // Seems like the voi doesn't exist in mAllVariables, so we don't have an easy means of access
+        // For now we'll just throw an error if the symbol is not found
+        if (symbolMap.find(ast->variable()->name()) == symbolMap.end()) {
+            throw std::runtime_error("Unsupported variable in getSymEngineRepresentation");
+        }
         return symbolMap.at(ast->variable()->name());
     default:
-        return SymEngine::null;
+        // Our parser is unable to handle this type, so we need to let the caller know by throwing an error
+        throw std::runtime_error("Unsupported AST type in getSymEngineRepresentation");
     }
 }
 
@@ -275,7 +285,15 @@ AnalyserEquationAstPtr AnalyserInternalEquation::rearrange(const AnalyserInterna
         astMap[sym] = var;
     }
 
-    SymEngine::RCP<const SymEngine::Basic> equation = getSymEngineRepresentation(mAst, symbolMap);
+    SymEngine::RCP<const SymEngine::Basic> equation;
+
+    try {
+        equation = getSymEngineRepresentation(mAst, symbolMap);
+    } catch (const std::runtime_error &e) {
+        // Our parser was unable to convert the AST to a SymEngine expression
+        return nullptr;
+    }
+
     SymEngine::RCP<const SymEngine::Set> solutionSet = solve(equation, symbolMap[variable->mVariable->name()]);
 
     SymEngine::vec_basic solutions = solutionSet->get_args();
