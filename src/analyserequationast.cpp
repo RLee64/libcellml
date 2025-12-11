@@ -248,28 +248,4 @@ void AnalyserEquationAst::swapLeftAndRightChildren()
     mPimpl->mRightChild = oldLeftChild;
 }
 
-SymEngine::RCP<const SymEngine::Basic> AnalyserEquationAst::getSymEngineRepresentation(const std::map<std::string, SymEngine::RCP<const SymEngine::Symbol>> &symbolMap)
-{
-    using namespace SymEngine;
-
-    AnalyserEquationAstPtr leftAst = leftChild();
-    AnalyserEquationAstPtr rightAst = rightChild();
-
-    // Recursively call getConvertedAst on left and right children
-    RCP<const Basic> left = leftAst != nullptr ? leftAst->getSymEngineRepresentation(symbolMap) : null;
-    RCP<const Basic> right = rightAst != nullptr ? rightAst->getSymEngineRepresentation(symbolMap) : null;
-
-    // Analyse mAst current type and value
-    switch (mPimpl->mType) {
-    case AnalyserEquationAst::Type::EQUALITY:
-        return Eq(left, right);
-    case AnalyserEquationAst::Type::PLUS:
-        return add(left, right);
-    case AnalyserEquationAst::Type::CI:
-        return symbolMap.at(variable()->name());
-    default:
-        return null;
-    }
-}
-
 } // namespace libcellml

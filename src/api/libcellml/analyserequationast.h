@@ -293,15 +293,6 @@ public:
      */
     void swapLeftAndRightChildren();
 
-    /**
-     * @brief Get the SymEngine representation of this @ref AnalyserEquationAst.
-     *
-     * Return the SymEngine representation of this @ref AnalyserEquationAst.
-     *
-     * @return The SymEngine representation.
-     */
-    SymEngine::RCP<const SymEngine::Basic> getSymEngineRepresentation(const std::map<std::string, SymEngine::RCP<const SymEngine::Symbol>> &symbolMap);
-
 private:
     AnalyserEquationAst(); /**< Constructor, @private. */
 

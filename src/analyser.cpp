@@ -199,30 +199,50 @@ bool AnalyserInternalEquation::variableOnLhsOrRhs(const AnalyserInternalVariable
            || variableOnRhs(variable);
 }
 
+SymEngine::RCP<const SymEngine::Basic> AnalyserInternalEquation::getSymEngineRepresentation(AnalyserEquationAstPtr ast, const std::map<std::string, SymEngine::RCP<const SymEngine::Symbol>> &symbolMap)
+{
+    AnalyserEquationAstPtr leftAst = ast->leftChild();
+    AnalyserEquationAstPtr rightAst = ast->rightChild();
+
+    // Recursively call getConvertedAst on left and right children
+    SymEngine::RCP<const SymEngine::Basic> left = leftAst != nullptr ? getSymEngineRepresentation(leftAst, symbolMap) : SymEngine::null;
+    SymEngine::RCP<const SymEngine::Basic> right = rightAst != nullptr ? getSymEngineRepresentation(rightAst, symbolMap) : SymEngine::null;
+
+    // Analyse mAst current type and value
+    switch (ast->type()) {
+    case AnalyserEquationAst::Type::EQUALITY:
+        return Eq(left, right);
+    case AnalyserEquationAst::Type::PLUS:
+        return add(left, right);
+    case AnalyserEquationAst::Type::CI:
+        return symbolMap.at(ast->variable()->name());
+    default:
+        return SymEngine::null;
+    }
+}
+
 AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(SymEngine::RCP<const SymEngine::Basic> &expr,
                                                                           std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, SymEngine::RCPBasicKeyLess> &astMap)
 {
-    using namespace SymEngine;
-
     auto children = expr->get_args();
 
     AnalyserEquationAstPtr ast = AnalyserEquationAst::create();
 
     switch (expr->get_type_code()) {
-    case SYMENGINE_EQUALITY: {
+    case SymEngine::SYMENGINE_EQUALITY: {
         ast->setType(AnalyserEquationAst::Type::EQUALITY);
         break;
     }
-    case SYMENGINE_ADD: {
+    case SymEngine::SYMENGINE_ADD: {
         ast->setType(AnalyserEquationAst::Type::PLUS);
         break;
     }
-    case SYMENGINE_MUL: {
+    case SymEngine::SYMENGINE_MUL: {
         ast->setType(AnalyserEquationAst::Type::TIMES);
         break;
     }
-    case SYMENGINE_SYMBOL: {
-        RCP<const Symbol> symbolExpr = rcp_dynamic_cast<const Symbol>(expr);
+    case SymEngine::SYMENGINE_SYMBOL: {
+        SymEngine::RCP<const SymEngine::Symbol> symbolExpr = SymEngine::rcp_dynamic_cast<const SymEngine::Symbol>(expr);
         ast->setType(AnalyserEquationAst::Type::CI);
         ast->setVariable(astMap.at(symbolExpr)->mVariable);
         break;
@@ -246,27 +266,25 @@ AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(SymEng
 
 AnalyserEquationAstPtr AnalyserInternalEquation::rearrange(const AnalyserInternalVariablePtr &variable)
 {
-    using namespace SymEngine;
-    std::map<std::string, RCP<const Symbol>> symbolMap;
+    std::map<std::string, SymEngine::RCP<const SymEngine::Symbol>> symbolMap;
     std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, SymEngine::RCPBasicKeyLess> astMap;
 
     for (const auto &var : mAllVariables) {
-        RCP<const Symbol> sym = symbol(var->mVariable->name());
+        SymEngine::RCP<const SymEngine::Symbol> sym = SymEngine::symbol(var->mVariable->name());
         symbolMap[var->mVariable->name()] = sym;
         astMap[sym] = var;
     }
 
-    RCP<const Basic> equation = mAst->getSymEngineRepresentation(symbolMap);
+    SymEngine::RCP<const SymEngine::Basic> equation = getSymEngineRepresentation(mAst, symbolMap);
+    SymEngine::RCP<const SymEngine::Set> solutionSet = solve(equation, symbolMap[variable->mVariable->name()]);
 
-    RCP<const Set> solutionSet = solve(equation, symbolMap[variable->mVariable->name()]);
-
-    vec_basic solutions = solutionSet->get_args();
+    SymEngine::vec_basic solutions = solutionSet->get_args();
 
     // Our system needs to be able to isolate a single solution
     if (solutions.size() != 1) {
         return nullptr;
     }
-    RCP<const Basic> answer = solutions.front();
+    SymEngine::RCP<const SymEngine::Basic> answer = solutions.front();
 
     // Rebuild the AST from the rearranged expression
     AnalyserEquationAstPtr ast = AnalyserEquationAst::create();
