@@ -400,7 +400,7 @@ bool AnalyserInternalEquation::check(const AnalyserModelPtr &analyserModel, bool
                                    mVariables.front() :
                                    nullptr;
 
-    // If we have one variable left, but it's not isolated, try to rearrange it
+    // If we have one variable left, but it's not isolated, try to rearrange it.
     if ((unknownVariableLeft != nullptr) && !variableOnLhsOrRhs(unknownVariableLeft)) {
         auto newAst = rearrangeFor(unknownVariableLeft);
         if (newAst != nullptr) {
