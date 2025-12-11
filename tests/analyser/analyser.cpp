@@ -1069,6 +1069,7 @@ TEST(Analyser, rearrangeAlgebraicEquation)
     EXPECT_EQ(size_t(0), parser->issueCount());
 
     auto analyser = libcellml::Analyser::create();
+
     analyser->analyseModel(model);
 
     EXPECT_EQ(libcellml::AnalyserModel::Type::ALGEBRAIC, analyser->analyserModel()->type());

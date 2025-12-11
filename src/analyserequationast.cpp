@@ -14,10 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <symengine/solve.h>
-
 #include "libcellml/analyserequationast.h"
-#include "libcellml/variable.h"
 
 #include "analyserequationast_p.h"
 
