@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<model xmlns="http://www.cellml.org/cellml/2.0#" name="Unarranged Algebraic Equation">
+<model xmlns="http://www.cellml.org/cellml/2.0#" name="UnarrangedAlgebraicEquation">
   <component name="Component">
     <variable name="x" units="dimensionless"/>
     <variable name="y" units="dimensionless"/>
