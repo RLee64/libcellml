@@ -200,7 +200,7 @@ bool AnalyserInternalEquation::variableOnLhsOrRhs(const AnalyserInternalVariable
 }
 
 AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(SymEngine::RCP<const SymEngine::Basic> &expr,
-                                                                          std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, RCPPtrLess> &astMap)
+                                                                          std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, SymEngine::RCPBasicKeyLess> &astMap)
 {
     using namespace SymEngine;
 
@@ -248,7 +248,7 @@ AnalyserEquationAstPtr AnalyserInternalEquation::rearrange(const AnalyserInterna
 {
     using namespace SymEngine;
     std::map<std::string, RCP<const Symbol>> symbolMap;
-    std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, RCPPtrLess> astMap;
+    std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, SymEngine::RCPBasicKeyLess> astMap;
 
     for (const auto &var : mAllVariables) {
         RCP<const Symbol> sym = symbol(var->mVariable->name());
@@ -257,6 +257,7 @@ AnalyserEquationAstPtr AnalyserInternalEquation::rearrange(const AnalyserInterna
     }
 
     RCP<const Basic> equation = mAst->getSymEngineRepresentation(symbolMap);
+
     RCP<const Set> solutionSet = solve(equation, symbolMap[variable->mVariable->name()]);
 
     vec_basic solutions = solutionSet->get_args();

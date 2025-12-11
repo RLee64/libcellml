@@ -30,15 +30,6 @@ class Basic;
 class Symbol;
 } // namespace SymEngine
 
-struct RCPPtrLess
-{
-    bool operator()(const SymEngine::RCP<const SymEngine::Symbol> &a,
-                    const SymEngine::RCP<const SymEngine::Symbol> &b) const
-    {
-        return a.get() < b.get(); // compare underlying pointers
-    }
-};
-
 namespace libcellml {
 
 struct AnalyserInternalEquation;
@@ -147,7 +138,7 @@ struct AnalyserInternalEquation
 
     AnalyserEquationAstPtr rearrange(const AnalyserInternalVariablePtr &variable);
     AnalyserEquationAstPtr parseSymEngineExpression(SymEngine::RCP<const SymEngine::Basic> &expr,
-                                                    std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, RCPPtrLess> &astMap);
+                                                    std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, SymEngine::RCPBasicKeyLess> &astMap);
 
     bool check(const AnalyserModelPtr &analyserModel, bool checkNlaSystems);
 };
