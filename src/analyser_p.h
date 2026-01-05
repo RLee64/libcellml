@@ -271,6 +271,8 @@ public:
     void addInvalidVariableIssue(const AnalyserInternalVariablePtr &variable,
                                  Issue::ReferenceRule referenceRule);
 
+    void tearDaeSystem();
+
     void analyseModel(const ModelPtr &model);
 
     AnalyserExternalVariablePtrs::const_iterator findExternalVariable(const VariablePtr &variable) const;

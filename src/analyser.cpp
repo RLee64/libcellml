@@ -2792,6 +2792,52 @@ void Analyser::AnalyserImpl::addInvalidVariableIssue(const AnalyserInternalVaria
     addIssue(issue);
 }
 
+void Analyser::AnalyserImpl::tearDaeSystem()
+{
+    // Pull out unknown variables and equations.
+    AnalyserInternalEquationPtrs equations;
+    AnalyserInternalVariablePtrs variables;
+
+    for (auto equation : mInternalEquations) {
+        if (equation->mType == AnalyserInternalEquation::Type::UNKNOWN) {
+            equations.push_back(equation);
+        }
+    }
+
+    for (auto variable : mInternalVariables) {
+        if (variable->mType == AnalyserInternalVariable::Type::UNKNOWN) {
+            variables.push_back(variable);
+        }
+    }
+
+    // Retrieve SymEngine representations and record them in a map.
+    std::map<AnalyserInternalEquationPtr, SymEngine::RCP<const SymEngine::Basic>> seMap;
+    SymEngineSymbolMap symbolMap;
+    SymEngineVariableMap variableMap;
+
+    // Create edge vectors.
+    // Unknown edges are relationships we still need to causalise.
+    // Definition edges denote variables as defined by the associated equation.
+    // Utilisation edges denote equations that make use of the associated variable.
+    std::vector<std::pair<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr>> unknownEdges;
+    std::vector<std::pair<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr>> definitionEdges;
+    std::vector<std::pair<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr>> utilisationEdges;
+
+    for (auto equation : equations) {
+        // Get SymEngine equation and map to it
+        auto [success, seEquation] = equation->symEngineEquation(equation->mAst, symbolMap, variableMap);
+        if (success) {
+            seMap[equation] = seEquation;
+        }
+
+        for (auto variable : equation->mUnknownVariables) {
+            if (std::find(variables.begin(), variables.end(), variable) != variables.end()) {
+                unknownEdges.push_back(std::make_pair(equation, variable));
+            }
+        }
+    }
+}
+
 void Analyser::AnalyserImpl::analyseModel(const ModelPtr &model)
 {
     // Reset a few things in case this analyser was to be used to analyse more
@@ -3012,6 +3058,8 @@ void Analyser::AnalyserImpl::analyseModel(const ModelPtr &model)
 
         if (((loopNumber == 1) || (loopNumber == 3)) && !relevantCheck) {
             ++loopNumber;
+
+            tearDaeSystem();
 
             relevantCheck = true;
             checkNlaSystems = true;
