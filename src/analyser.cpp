@@ -2792,6 +2792,59 @@ void Analyser::AnalyserImpl::addInvalidVariableIssue(const AnalyserInternalVaria
     addIssue(issue);
 }
 
+void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariablePtr &variable,
+                                                   const AnalyserInternalEquationPtr &equation,
+                                                   std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtrs> &unknownVariablesMap,
+                                                   std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> &unknownEquationsMap,
+                                                   std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr> &definitionMap,
+                                                   std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> &utilisationMap)
+{
+    // TODO Need to handle case where SymEngine can't rearrange (will involve refactoring at other layers as well).
+    auto newAst = equation->rearrangeFor(variable);
+    if (newAst != nullptr) {
+        // Change actual equation data.
+        equation->mAst = newAst;
+        equation->mType = AnalyserInternalEquation::Type::ALGEBRAIC;
+    }
+
+    // Make the equation define the variable.
+    definitionMap[equation] = variable;
+
+    // Make all other relationships originating at the equation into utilisation relationships
+    auto &otherVariables = unknownVariablesMap[equation];
+    for (auto otherVariable : otherVariables) {
+        if (otherVariable == variable) {
+            continue;
+        }
+
+        // Remove the unknown link from our other variable to this equation.
+        auto &linkedEquations = unknownEquationsMap[otherVariable];
+        linkedEquations.erase(std::find(linkedEquations.begin(), linkedEquations.end(), equation));
+
+        // Create a utilisation link from our other variable to this equation.
+        utilisationMap[otherVariable].push_back(equation);
+    }
+    // Since the equation's causalisation has been defined, it no longer has any undefined edges.
+    otherVariables.clear();
+
+    // Make all other relationships originating at the variable into utilisation relationships.
+    auto &otherEquations = unknownEquationsMap[variable];
+    for (auto otherEquation : otherEquations) {
+        if (otherEquation == equation) {
+            continue;
+        }
+
+        // Remove the unknown link from our other equation to this variable.
+        auto &linkedVariables = unknownVariablesMap[otherEquation];
+        otherVariables.erase(std::find(linkedVariables.begin(), linkedVariables.end(), variable));
+
+        // Create a utilisation link from our other equation back to this variable.
+        utilisationMap[variable].push_back(otherEquation);
+    }
+    // Since the variable's causalisation has been defined, it no longer has any undefined edges.
+    otherEquations.clear();
+}
+
 void Analyser::AnalyserImpl::tearDaeSystem()
 {
     // Implements practical Cellier tearing algorithm to reduce DAE complexity.
@@ -2830,6 +2883,42 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
                 unknownVariablesMap[equation].push_back(variable);
                 unknownEquationsMap[variable].push_back(equation);
+            }
+        }
+    }
+
+    while (mInternalEquations.size() > 0) {
+        // Identify equations that we can currently causalise.
+        bool changed = false;
+        while (!changed) {
+            for (auto equation : equations) {
+                if (unknownVariablesMap[equation].size() != 1) {
+                    continue;
+                }
+
+                causaliseRelationship(unknownVariablesMap[equation].front(),
+                                      equation,
+                                      unknownVariablesMap,
+                                      unknownEquationsMap,
+                                      definitionMap,
+                                      utilisationMap);
+
+                changed = true;
+            }
+
+            for (auto variable : variables) {
+                if (unknownEquationsMap[variable].size() != 1) {
+                    continue;
+                }
+
+                causaliseRelationship(variable,
+                                      unknownEquationsMap[variable].front(),
+                                      unknownVariablesMap,
+                                      unknownEquationsMap,
+                                      definitionMap,
+                                      utilisationMap);
+
+                changed = true;
             }
         }
     }
