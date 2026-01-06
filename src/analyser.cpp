@@ -2821,7 +2821,7 @@ void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariabl
 
             // Remove the unknown link from our other variable to this equation.
             auto &linkedEquations = unknownEquationsMap[otherVariable];
-            linkedEquations.erase(std::find(linkedEquations.begin(), linkedEquations.end(), equation));
+            linkedEquations.erase(std::remove(linkedEquations.begin(), linkedEquations.end(), equation), linkedEquations.end());
 
             equation->mDependencies.push_back(otherVariable->mVariable);
         }
@@ -2896,8 +2896,8 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
                 auto variable = equation->mVariables.size() == 1 ? equation->mVariables.front() : equation->mStateVariables.front();
 
-                unknownEquations.erase(std::find(unknownEquations.begin(), unknownEquations.end(), equation));
-                unknownVariables.erase(std::find(unknownVariables.begin(), unknownVariables.end(), variable));
+                unknownEquations.erase(std::remove(unknownEquations.begin(), unknownEquations.end(), equation), unknownEquations.end());
+                unknownVariables.erase(std::remove(unknownVariables.begin(), unknownVariables.end(), variable), unknownVariables.end());
 
                 causaliseRelationship(variable,
                                       equation,
@@ -2913,8 +2913,8 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
                 auto equation = unknownEquationsMap[variable].front();
 
-                unknownEquations.erase(std::find(unknownEquations.begin(), unknownEquations.end(), equation));
-                unknownVariables.erase(std::find(unknownVariables.begin(), unknownVariables.end(), variable));
+                unknownEquations.erase(std::remove(unknownEquations.begin(), unknownEquations.end(), equation), unknownEquations.end());
+                unknownVariables.erase(std::remove(unknownVariables.begin(), unknownVariables.end(), variable), unknownVariables.end());
 
                 causaliseRelationship(variable,
                                       equation,
@@ -2954,7 +2954,7 @@ void Analyser::AnalyserImpl::tearDaeSystem()
         if (tearingVariable != nullptr) {
             tearingVariables.push_back(tearingVariable);
 
-            unknownVariables.erase(std::find(unknownVariables.begin(), unknownVariables.end(), tearingVariable));
+            unknownVariables.erase(std::remove(unknownVariables.begin(), unknownVariables.end(), tearingVariable), unknownVariables.end());
 
             // TODO This is repeated from the causalisation function, need to refactor.
             // Make all other relationships originating at the variable into utilisation relationships.
