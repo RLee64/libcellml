@@ -2870,36 +2870,31 @@ void Analyser::AnalyserImpl::tearDaeSystem()
     // Maps variables to all the equations that utilise them.
     std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> utilisationMap;
 
-    for (auto variable : mInternalVariables) {
-        if (variable->mType == AnalyserInternalVariable::Type::UNKNOWN) {
-            variables.push_back(variable);
-            unknownEquationsMap[variable] = std::vector<AnalyserInternalEquationPtr>();
-            utilisationMap[variable] = std::vector<AnalyserInternalEquationPtr>();
-        }
-    }
-    unknownVariables = variables;
-
     for (auto equation : mInternalEquations) {
         if (equation->mType == AnalyserInternalEquation::Type::UNKNOWN) {
             equations.push_back(equation);
-            unknownVariablesMap[equation] = std::vector<AnalyserInternalVariablePtr>();
 
-            for (auto variable : equation->mUnknownVariables) {
-                if (std::find(variables.begin(), variables.end(), variable) == variables.end()) {
-                    continue;
+            for (const auto *equationVariables : {&equation->mStateVariables, &equation->mVariables}) {
+                for (auto variable : *equationVariables) {
+                    unknownVariablesMap[equation].push_back(variable);
+                    unknownEquationsMap[variable].push_back(equation);
+
+                    if (std::find(variables.begin(), variables.end(), variable) == variables.end()) {
+                        variables.push_back(variable);
+                    }
                 }
-
-                unknownVariablesMap[equation].push_back(variable);
-                unknownEquationsMap[variable].push_back(equation);
             }
         }
     }
+    unknownVariables = variables;
     unknownEquations = equations;
 
     while (unknownVariables.size() > 0) {
         // Identify equations that we can currently causalise.
-        bool changed = false;
-        while (!changed) {
+        bool changed = true;
+        while (changed) {
+            changed = false;
+
             for (auto equation : equations) {
                 if (unknownVariablesMap[equation].size() != 1) {
                     continue;
@@ -2953,7 +2948,7 @@ void Analyser::AnalyserImpl::tearDaeSystem()
         int maxCausalMaking = 0;
         AnalyserInternalVariablePtr tearingVariable;
 
-        for (auto variable : variables) {
+        for (auto variable : unknownVariables) {
             int causalMaking = 0;
             for (auto equation : unknownEquationsMap[variable]) {
                 if (unknownVariablesMap[equation].size() == 2) {
@@ -2970,6 +2965,8 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
         if (tearingVariable != nullptr) {
             tearingVariables.push_back(tearingVariable);
+
+            unknownVariables.erase(std::find(unknownVariables.begin(), unknownVariables.end(), tearingVariable));
 
             // TODO This is repeated from the causalisation function, need to refactor.
             // Make all other relationships originating at the variable into utilisation relationships.
