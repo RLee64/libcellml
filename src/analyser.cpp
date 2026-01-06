@@ -2794,45 +2794,42 @@ void Analyser::AnalyserImpl::addInvalidVariableIssue(const AnalyserInternalVaria
 
 void Analyser::AnalyserImpl::tearDaeSystem()
 {
-    // Pull out unknown variables and equations.
-    AnalyserInternalEquationPtrs equations;
-    AnalyserInternalVariablePtrs variables;
+    // Implements practical Cellier tearing algorithm to reduce DAE complexity.
 
-    for (auto equation : mInternalEquations) {
-        if (equation->mType == AnalyserInternalEquation::Type::UNKNOWN) {
-            equations.push_back(equation);
-        }
-    }
+    // Stores the variables and equations that our tearing algorithm will consider.
+    AnalyserInternalVariablePtrs variables;
+    AnalyserInternalEquationPtrs equations;
+
+    // Unknown variables and equations form a bidirectional map for relationships we still need to causalise.
+    std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtrs> unknownVariablesMap;
+    std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> unknownEquationsMap;
+
+    // Maps equations to a unique variable that they define.
+    std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr> definitionMap;
+
+    // Maps variables to all the equations that utilise them.
+    std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> utilisationMap;
 
     for (auto variable : mInternalVariables) {
         if (variable->mType == AnalyserInternalVariable::Type::UNKNOWN) {
             variables.push_back(variable);
+            unknownEquationsMap[variable] = std::vector<AnalyserInternalEquationPtr>();
+            utilisationMap[variable] = std::vector<AnalyserInternalEquationPtr>();
         }
     }
 
-    // Retrieve SymEngine representations and record them in a map.
-    std::map<AnalyserInternalEquationPtr, SymEngine::RCP<const SymEngine::Basic>> seMap;
-    SymEngineSymbolMap symbolMap;
-    SymEngineVariableMap variableMap;
+    for (auto equation : mInternalEquations) {
+        if (equation->mType == AnalyserInternalEquation::Type::UNKNOWN) {
+            equations.push_back(equation);
+            unknownVariablesMap[equation] = std::vector<AnalyserInternalVariablePtr>();
 
-    // Create edge vectors.
-    // Unknown edges are relationships we still need to causalise.
-    // Definition edges denote variables as defined by the associated equation.
-    // Utilisation edges denote equations that make use of the associated variable.
-    std::vector<std::pair<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr>> unknownEdges;
-    std::vector<std::pair<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr>> definitionEdges;
-    std::vector<std::pair<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr>> utilisationEdges;
+            for (auto variable : equation->mUnknownVariables) {
+                if (std::find(variables.begin(), variables.end(), variable) == variables.end()) {
+                    continue;
+                }
 
-    for (auto equation : equations) {
-        // Get SymEngine equation and map to it
-        auto [success, seEquation] = equation->symEngineEquation(equation->mAst, symbolMap, variableMap);
-        if (success) {
-            seMap[equation] = seEquation;
-        }
-
-        for (auto variable : equation->mUnknownVariables) {
-            if (std::find(variables.begin(), variables.end(), variable) != variables.end()) {
-                unknownEdges.push_back(std::make_pair(equation, variable));
+                unknownVariablesMap[equation].push_back(variable);
+                unknownEquationsMap[variable].push_back(equation);
             }
         }
     }
