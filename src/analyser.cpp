@@ -2857,6 +2857,8 @@ void Analyser::AnalyserImpl::tearDaeSystem()
     AnalyserInternalVariablePtrs unknownVariables;
     AnalyserInternalEquationPtrs unknownEquations;
 
+    AnalyserInternalVariablePtrs tearingVariables;
+
     // Unknown variables and equations form a bidirectional map for relationships we still need to causalise.
     std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtrs> unknownVariablesMap;
     std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> unknownEquationsMap;
@@ -2893,7 +2895,7 @@ void Analyser::AnalyserImpl::tearDaeSystem()
     }
     unknownEquations = equations;
 
-    while (unknownEquations.size() > 0 || unknownVariables.size() > 0) {
+    while (unknownVariables.size() > 0) {
         // Identify equations that we can currently causalise.
         bool changed = false;
         while (!changed) {
@@ -2935,6 +2937,49 @@ void Analyser::AnalyserImpl::tearDaeSystem()
                                       utilisationMap);
 
                 changed = true;
+            }
+        }
+
+        // Pick a tearing variable using modified Cellier-Heuristic 3.
+
+        // For every variable, identify the following two statistics
+        // 1. The number of equations that would be made causal if this variable were known.
+        // 2. The number of uncausalised relationships involving the variable
+        // The chosen tearing variable must have the greatest sum of these two factors, and
+        // should have the greatest quantity of the first statistic among the variables
+        // which meet the first criteria.
+        int maxSum = 0;
+        int maxCausalMaking = 0;
+        AnalyserInternalVariablePtr tearingVariable;
+
+        for (auto variable : variables) {
+            int causalMaking = 0;
+            for (auto equation : unknownEquationsMap[variable]) {
+                if (unknownVariablesMap[equation].size() == 2) {
+                    causalMaking++;
+                }
+            }
+            int sum = causalMaking + unknownEquationsMap[variable].size();
+            if (sum > maxSum || (sum == maxSum && causalMaking > maxCausalMaking)) {
+                maxSum = sum;
+                maxCausalMaking = causalMaking;
+                tearingVariable = variable;
+            }
+        }
+
+        if (tearingVariable != nullptr) {
+            tearingVariables.push_back(tearingVariable);
+
+            // TODO This is repeated from the causalisation function, need to refactor.
+            // Make all other relationships originating at the variable into utilisation relationships.
+            auto &otherEquations = unknownEquationsMap[tearingVariable];
+            for (auto otherEquation : otherEquations) {
+                // Remove the unknown link from our other equation to this variable.
+                auto &linkedVariables = unknownVariablesMap[otherEquation];
+                linkedVariables.erase(std::find(linkedVariables.begin(), linkedVariables.end(), tearingVariable));
+
+                // Create a utilisation link from our other equation back to this variable.
+                utilisationMap[tearingVariable].push_back(otherEquation);
             }
         }
     }
