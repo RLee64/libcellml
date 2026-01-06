@@ -2803,14 +2803,6 @@ void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariabl
         equation->mAst = newAst;
     }
 
-    // TODO Need to properly classify equation type
-    if (variable->mType == AnalyserInternalVariable::Type::STATE) {
-        equation->mType = AnalyserInternalEquation::Type::ODE;
-    } else {
-        equation->mType = AnalyserInternalEquation::Type::COMPUTED_CONSTANT;
-        variable->mType = AnalyserInternalVariable::Type::COMPUTED_VARIABLE_BASED_CONSTANT;
-    }
-
     equation->mUnknownVariables.push_back(variable);
 
     for (const auto *otherVariables : {&equation->mStateVariables, &equation->mVariables}) {
@@ -2862,6 +2854,11 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
     AnalyserInternalVariablePtrs tearingVariables;
 
+    // Early equations are causalised by equations with only one linked variable left and can be known earlier on.
+    // Late equations are causalised by a variable with only one linked equation left and can only be known at the end.
+    AnalyserInternalEquationPtrs earlyEquations;
+    AnalyserInternalEquationPtrs lateEquations;
+
     // Link variables to the equations they're included in
     std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> unknownEquationsMap;
 
@@ -2899,6 +2896,8 @@ void Analyser::AnalyserImpl::tearDaeSystem()
                 unknownEquations.erase(std::remove(unknownEquations.begin(), unknownEquations.end(), equation), unknownEquations.end());
                 unknownVariables.erase(std::remove(unknownVariables.begin(), unknownVariables.end(), variable), unknownVariables.end());
 
+                earlyEquations.push_back(equation);
+
                 causaliseRelationship(variable,
                                       equation,
                                       unknownEquationsMap);
@@ -2915,6 +2914,8 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
                 unknownEquations.erase(std::remove(unknownEquations.begin(), unknownEquations.end(), equation), unknownEquations.end());
                 unknownVariables.erase(std::remove(unknownVariables.begin(), unknownVariables.end(), variable), unknownVariables.end());
+
+                lateEquations.insert(lateEquations.begin(), equation);
 
                 causaliseRelationship(variable,
                                       equation,
@@ -3001,8 +3002,7 @@ void Analyser::AnalyserImpl::tearDaeSystem()
         auto equation = unknownEquations.front();
         auto variable = tearingVariables.front();
 
-        variable->mType = AnalyserInternalVariable::Type::COMPUTED_VARIABLE_BASED_CONSTANT;
-        equation->mType = AnalyserInternalEquation::Type::COMPUTED_CONSTANT;
+        equation->mUnknownVariables.push_back(variable);
 
         // TODO This is repeated from rearrangeFor(), when refactoring this should be changed to
         // remove duplication.
@@ -3029,6 +3029,51 @@ void Analyser::AnalyserImpl::tearDaeSystem()
         rearrangedEquationAst->setParent(ast);
 
         equation->mAst = ast;
+    }
+
+    // Classify our equations and variables
+    for (const auto *equations : {&unknownEquations, &earlyEquations, &lateEquations}) {
+        for (const auto equation : *equations) {
+            // TODO classify NLAs first.
+
+            std::cout << seMap[equation] << std::endl;
+
+            auto variable = equation->mUnknownVariables.front();
+
+            if (variable->mType == AnalyserInternalVariable::Type::STATE) {
+                equation->mType = AnalyserInternalEquation::Type::ODE;
+                continue;
+            }
+            // True when equations don't contain any variables.
+            bool onlyConstants = true;
+            // True when all variables of an equation or constant (i.e. true constant or computed constant).
+            bool onlyComputedConstants = true;
+
+            for (const auto dependentVariable : equation->mAllVariables) {
+                switch (dependentVariable->mType) {
+                case (AnalyserInternalVariable::Type::STATE):
+                case (AnalyserInternalVariable::Type::ALGEBRAIC_VARIABLE):
+                case (AnalyserInternalVariable::Type::INITIALISED_ALGEBRAIC_VARIABLE):
+                    // Set to false only when the above are true.
+                    onlyComputedConstants = false;
+                case (AnalyserInternalVariable::Type::COMPUTED_TRUE_CONSTANT):
+                case (AnalyserInternalVariable::Type::COMPUTED_VARIABLE_BASED_CONSTANT):
+                    // Set to false when ANY of the above are true.
+                    onlyConstants = false;
+                }
+            }
+
+            if (onlyConstants) {
+                variable->mType = AnalyserInternalVariable::Type::COMPUTED_TRUE_CONSTANT;
+                equation->mType = AnalyserInternalEquation::Type::CONSTANT;
+            } else if (onlyComputedConstants) {
+                variable->mType = AnalyserInternalVariable::Type::COMPUTED_VARIABLE_BASED_CONSTANT;
+                equation->mType = AnalyserInternalEquation::Type::COMPUTED_CONSTANT;
+            } else {
+                variable->mType = AnalyserInternalVariable::Type::ALGEBRAIC_VARIABLE;
+                equation->mType = AnalyserInternalEquation::Type::ALGEBRAIC;
+            }
+        }
     }
 }
 
