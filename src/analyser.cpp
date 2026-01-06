@@ -2983,6 +2983,61 @@ void Analyser::AnalyserImpl::tearDaeSystem()
             otherEquations.clear();
         }
     }
+
+    // Substitute to remove known equations.
+    SymEngineSymbolMap symbolMap;
+    SymEngineVariableMap variableMap;
+    std::map<AnalyserInternalEquationPtr, SymEngine::RCP<const SymEngine::Basic>> seMap;
+    for (auto equation : equations) {
+        auto [result, seEquation] = equation->symEngineEquation(equation->mAst, symbolMap, variableMap);
+        if (result) {
+            seMap[equation] = seEquation;
+        }
+    }
+
+    for (auto equation : equations) {
+        auto seEquation = seMap[equation];
+        SymEngine::map_basic_basic substitutionMap;
+        substitutionMap[seEquation->get_args().front()] = seEquation->get_args().back();
+
+        for (auto otherEquation : equations) {
+            if (equation == otherEquation) {
+                continue;
+            }
+            seMap[otherEquation] = seMap[otherEquation]->subs(substitutionMap);
+        }
+    }
+
+    // TODO Need to capture more common case where there's multiple tearing variables.
+    if (tearingVariables.size() == 1) {
+        auto equation = unknownEquations.front();
+        auto variable = tearingVariables.front();
+
+        // TODO This is repeated from rearrangeFor(), when refactoring this should be changed to
+        // remove duplication.
+        SymEngine::RCP<const SymEngine::Set> solutionSet;
+        solutionSet = solve(seMap[equation], symbolMap[variable->mVariable->name()]);
+
+        SymEngine::vec_basic solutions = solutionSet->get_args();
+        SymEngine::RCP<const SymEngine::Basic> answer = solutions.front();
+
+        // Rebuild the AST from the rearranged expression.
+        AnalyserEquationAstPtr ast = AnalyserEquationAst::create();
+        AnalyserEquationAstPtr isolatedVariableAst = AnalyserEquationAst::create();
+        AnalyserEquationAstPtr rearrangedEquationAst = equation->parseSymEngineExpression(answer, nullptr, variableMap);
+
+        ast->setType(AnalyserEquationAst::Type::EQUALITY);
+        ast->setLeftChild(isolatedVariableAst);
+        ast->setRightChild(rearrangedEquationAst);
+
+        isolatedVariableAst->setType(AnalyserEquationAst::Type::CI);
+        isolatedVariableAst->setVariable(variable->mVariable);
+        isolatedVariableAst->setParent(ast);
+
+        rearrangedEquationAst->setParent(ast);
+
+        equation->mAst = ast;
+    }
 }
 
 void Analyser::AnalyserImpl::analyseModel(const ModelPtr &model)
