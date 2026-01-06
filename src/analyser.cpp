@@ -2804,6 +2804,7 @@ void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariabl
     if (newAst != nullptr) {
         // Change actual equation data.
         equation->mAst = newAst;
+        // TODO Need to properly classify equation type
         equation->mType = AnalyserInternalEquation::Type::ALGEBRAIC;
     }
 
@@ -2836,7 +2837,7 @@ void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariabl
 
         // Remove the unknown link from our other equation to this variable.
         auto &linkedVariables = unknownVariablesMap[otherEquation];
-        otherVariables.erase(std::find(linkedVariables.begin(), linkedVariables.end(), variable));
+        linkedVariables.erase(std::find(linkedVariables.begin(), linkedVariables.end(), variable));
 
         // Create a utilisation link from our other equation back to this variable.
         utilisationMap[variable].push_back(otherEquation);
@@ -2981,6 +2982,8 @@ void Analyser::AnalyserImpl::tearDaeSystem()
                 // Create a utilisation link from our other equation back to this variable.
                 utilisationMap[tearingVariable].push_back(otherEquation);
             }
+            // Since the variable's causalisation has been defined, it no longer has any undefined edges.
+            otherEquations.clear();
         }
     }
 }
