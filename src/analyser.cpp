@@ -2804,9 +2804,17 @@ void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariabl
     if (newAst != nullptr) {
         // Change actual equation data.
         equation->mAst = newAst;
-        // TODO Need to properly classify equation type
-        equation->mType = AnalyserInternalEquation::Type::ALGEBRAIC;
     }
+
+    // TODO Need to properly classify equation type
+    if (variable->mType == AnalyserInternalVariable::Type::STATE) {
+        equation->mType = AnalyserInternalEquation::Type::ODE;
+    } else {
+        equation->mType = AnalyserInternalEquation::Type::COMPUTED_CONSTANT;
+        variable->mType = AnalyserInternalVariable::Type::COMPUTED_VARIABLE_BASED_CONSTANT;
+    }
+
+    equation->mUnknownVariables.push_back(variable);
 
     // Make the equation define the variable.
     definitionMap[equation] = variable;
@@ -2824,6 +2832,10 @@ void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariabl
 
         // Create a utilisation link from our other variable to this equation.
         utilisationMap[otherVariable].push_back(equation);
+
+        equation->mDependencies.push_back(otherVariable->mVariable);
+        equation->mStateVariables.erase(std::remove(equation->mStateVariables.begin(), equation->mStateVariables.end(), otherVariable), equation->mStateVariables.end());
+        equation->mVariables.erase(std::remove(equation->mVariables.begin(), equation->mVariables.end(), otherVariable), equation->mVariables.end());
     }
     // Since the equation's causalisation has been defined, it no longer has any undefined edges.
     otherVariables.clear();
@@ -2841,6 +2853,10 @@ void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariabl
 
         // Create a utilisation link from our other equation back to this variable.
         utilisationMap[variable].push_back(otherEquation);
+
+        otherEquation->mDependencies.push_back(variable->mVariable);
+        otherEquation->mStateVariables.erase(std::remove(otherEquation->mStateVariables.begin(), otherEquation->mStateVariables.end(), variable), otherEquation->mStateVariables.end());
+        otherEquation->mVariables.erase(std::remove(otherEquation->mVariables.begin(), otherEquation->mVariables.end(), variable), otherEquation->mVariables.end());
     }
     // Since the variable's causalisation has been defined, it no longer has any undefined edges.
     otherEquations.clear();
@@ -3013,9 +3029,13 @@ void Analyser::AnalyserImpl::tearDaeSystem()
         auto equation = unknownEquations.front();
         auto variable = tearingVariables.front();
 
+        variable->mType = AnalyserInternalVariable::Type::COMPUTED_VARIABLE_BASED_CONSTANT;
+        equation->mType = AnalyserInternalEquation::Type::COMPUTED_CONSTANT;
+
         // TODO This is repeated from rearrangeFor(), when refactoring this should be changed to
         // remove duplication.
-        SymEngine::RCP<const SymEngine::Set> solutionSet;
+        SymEngine::RCP<const SymEngine::Set>
+            solutionSet;
         solutionSet = solve(seMap[equation], symbolMap[variable->mVariable->name()]);
 
         SymEngine::vec_basic solutions = solutionSet->get_args();
