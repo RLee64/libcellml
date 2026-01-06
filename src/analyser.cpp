@@ -2853,6 +2853,10 @@ void Analyser::AnalyserImpl::tearDaeSystem()
     AnalyserInternalVariablePtrs variables;
     AnalyserInternalEquationPtrs equations;
 
+    // The variables and equations we've yet to causalise.
+    AnalyserInternalVariablePtrs unknownVariables;
+    AnalyserInternalEquationPtrs unknownEquations;
+
     // Unknown variables and equations form a bidirectional map for relationships we still need to causalise.
     std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtrs> unknownVariablesMap;
     std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> unknownEquationsMap;
@@ -2870,6 +2874,7 @@ void Analyser::AnalyserImpl::tearDaeSystem()
             utilisationMap[variable] = std::vector<AnalyserInternalEquationPtr>();
         }
     }
+    unknownVariables = variables;
 
     for (auto equation : mInternalEquations) {
         if (equation->mType == AnalyserInternalEquation::Type::UNKNOWN) {
@@ -2886,8 +2891,9 @@ void Analyser::AnalyserImpl::tearDaeSystem()
             }
         }
     }
+    unknownEquations = equations;
 
-    while (mInternalEquations.size() > 0) {
+    while (unknownEquations.size() > 0 || unknownVariables.size() > 0) {
         // Identify equations that we can currently causalise.
         bool changed = false;
         while (!changed) {
@@ -2896,7 +2902,12 @@ void Analyser::AnalyserImpl::tearDaeSystem()
                     continue;
                 }
 
-                causaliseRelationship(unknownVariablesMap[equation].front(),
+                auto variable = unknownVariablesMap[equation].front();
+
+                unknownEquations.erase(std::find(unknownEquations.begin(), unknownEquations.end(), equation));
+                unknownVariables.erase(std::find(unknownVariables.begin(), unknownVariables.end(), variable));
+
+                causaliseRelationship(variable,
                                       equation,
                                       unknownVariablesMap,
                                       unknownEquationsMap,
@@ -2911,8 +2922,13 @@ void Analyser::AnalyserImpl::tearDaeSystem()
                     continue;
                 }
 
+                auto equation = unknownEquationsMap[variable].front();
+
+                unknownEquations.erase(std::find(unknownEquations.begin(), unknownEquations.end(), equation));
+                unknownVariables.erase(std::find(unknownVariables.begin(), unknownVariables.end(), variable));
+
                 causaliseRelationship(variable,
-                                      unknownEquationsMap[variable].front(),
+                                      equation,
                                       unknownVariablesMap,
                                       unknownEquationsMap,
                                       definitionMap,
