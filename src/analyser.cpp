@@ -2794,10 +2794,7 @@ void Analyser::AnalyserImpl::addInvalidVariableIssue(const AnalyserInternalVaria
 
 void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariablePtr &variable,
                                                    const AnalyserInternalEquationPtr &equation,
-                                                   std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtrs> &unknownVariablesMap,
-                                                   std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> &unknownEquationsMap,
-                                                   std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr> &definitionMap,
-                                                   std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> &utilisationMap)
+                                                   std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> &unknownEquationsMap)
 {
     // TODO Need to handle case where SymEngine can't rearrange (will involve refactoring at other layers as well).
     auto newAst = equation->rearrangeFor(variable);
@@ -2816,49 +2813,38 @@ void Analyser::AnalyserImpl::causaliseRelationship(const AnalyserInternalVariabl
 
     equation->mUnknownVariables.push_back(variable);
 
-    // Make the equation define the variable.
-    definitionMap[equation] = variable;
+    for (const auto *otherVariables : {&equation->mStateVariables, &equation->mVariables}) {
+        for (auto otherVariable : *otherVariables) {
+            if (otherVariable == variable) {
+                continue;
+            }
 
-    // Make all other relationships originating at the equation into utilisation relationships
-    auto &otherVariables = unknownVariablesMap[equation];
-    for (auto otherVariable : otherVariables) {
-        if (otherVariable == variable) {
-            continue;
+            // Remove the unknown link from our other variable to this equation.
+            auto &linkedEquations = unknownEquationsMap[otherVariable];
+            linkedEquations.erase(std::find(linkedEquations.begin(), linkedEquations.end(), equation));
+
+            equation->mDependencies.push_back(otherVariable->mVariable);
         }
-
-        // Remove the unknown link from our other variable to this equation.
-        auto &linkedEquations = unknownEquationsMap[otherVariable];
-        linkedEquations.erase(std::find(linkedEquations.begin(), linkedEquations.end(), equation));
-
-        // Create a utilisation link from our other variable to this equation.
-        utilisationMap[otherVariable].push_back(equation);
-
-        equation->mDependencies.push_back(otherVariable->mVariable);
-        equation->mStateVariables.erase(std::remove(equation->mStateVariables.begin(), equation->mStateVariables.end(), otherVariable), equation->mStateVariables.end());
-        equation->mVariables.erase(std::remove(equation->mVariables.begin(), equation->mVariables.end(), otherVariable), equation->mVariables.end());
     }
-    // Since the equation's causalisation has been defined, it no longer has any undefined edges.
-    otherVariables.clear();
 
-    // Make all other relationships originating at the variable into utilisation relationships.
+    // Stop tracking all state variables and variables since we know their relationship with this equation now.
+    equation->mStateVariables.clear();
+    equation->mVariables.clear();
+
+    // Update all other equations to consider this variable known.
     auto &otherEquations = unknownEquationsMap[variable];
     for (auto otherEquation : otherEquations) {
         if (otherEquation == equation) {
             continue;
         }
 
-        // Remove the unknown link from our other equation to this variable.
-        auto &linkedVariables = unknownVariablesMap[otherEquation];
-        linkedVariables.erase(std::find(linkedVariables.begin(), linkedVariables.end(), variable));
-
-        // Create a utilisation link from our other equation back to this variable.
-        utilisationMap[variable].push_back(otherEquation);
-
         otherEquation->mDependencies.push_back(variable->mVariable);
+
+        // Stop tracking the variable since it is now known.
         otherEquation->mStateVariables.erase(std::remove(otherEquation->mStateVariables.begin(), otherEquation->mStateVariables.end(), variable), otherEquation->mStateVariables.end());
         otherEquation->mVariables.erase(std::remove(otherEquation->mVariables.begin(), otherEquation->mVariables.end(), variable), otherEquation->mVariables.end());
     }
-    // Since the variable's causalisation has been defined, it no longer has any undefined edges.
+    // Since the variable's causalisation has been defined, it no longer has any unclassified edges.
     otherEquations.clear();
 }
 
@@ -2876,15 +2862,8 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
     AnalyserInternalVariablePtrs tearingVariables;
 
-    // Unknown variables and equations form a bidirectional map for relationships we still need to causalise.
-    std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtrs> unknownVariablesMap;
+    // Link variables to the equations they're included in
     std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> unknownEquationsMap;
-
-    // Maps equations to a unique variable that they define.
-    std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr> definitionMap;
-
-    // Maps variables to all the equations that utilise them.
-    std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> utilisationMap;
 
     for (auto equation : mInternalEquations) {
         if (equation->mType == AnalyserInternalEquation::Type::UNKNOWN) {
@@ -2892,7 +2871,6 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
             for (const auto *equationVariables : {&equation->mStateVariables, &equation->mVariables}) {
                 for (auto variable : *equationVariables) {
-                    unknownVariablesMap[equation].push_back(variable);
                     unknownEquationsMap[variable].push_back(equation);
 
                     if (std::find(variables.begin(), variables.end(), variable) == variables.end()) {
@@ -2912,21 +2890,18 @@ void Analyser::AnalyserImpl::tearDaeSystem()
             changed = false;
 
             for (auto equation : equations) {
-                if (unknownVariablesMap[equation].size() != 1) {
+                if (equation->mVariables.size() + equation->mStateVariables.size() != 1) {
                     continue;
                 }
 
-                auto variable = unknownVariablesMap[equation].front();
+                auto variable = equation->mVariables.size() == 1 ? equation->mVariables.front() : equation->mStateVariables.front();
 
                 unknownEquations.erase(std::find(unknownEquations.begin(), unknownEquations.end(), equation));
                 unknownVariables.erase(std::find(unknownVariables.begin(), unknownVariables.end(), variable));
 
                 causaliseRelationship(variable,
                                       equation,
-                                      unknownVariablesMap,
-                                      unknownEquationsMap,
-                                      definitionMap,
-                                      utilisationMap);
+                                      unknownEquationsMap);
 
                 changed = true;
             }
@@ -2943,10 +2918,7 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
                 causaliseRelationship(variable,
                                       equation,
-                                      unknownVariablesMap,
-                                      unknownEquationsMap,
-                                      definitionMap,
-                                      utilisationMap);
+                                      unknownEquationsMap);
 
                 changed = true;
             }
@@ -2967,7 +2939,7 @@ void Analyser::AnalyserImpl::tearDaeSystem()
         for (auto variable : unknownVariables) {
             int causalMaking = 0;
             for (auto equation : unknownEquationsMap[variable]) {
-                if (unknownVariablesMap[equation].size() == 2) {
+                if (equation->mStateVariables.size() + equation->mVariables.size() == 2) {
                     causalMaking++;
                 }
             }
@@ -2986,16 +2958,16 @@ void Analyser::AnalyserImpl::tearDaeSystem()
 
             // TODO This is repeated from the causalisation function, need to refactor.
             // Make all other relationships originating at the variable into utilisation relationships.
+            // Update all other equations to consider this variable known.
             auto &otherEquations = unknownEquationsMap[tearingVariable];
             for (auto otherEquation : otherEquations) {
-                // Remove the unknown link from our other equation to this variable.
-                auto &linkedVariables = unknownVariablesMap[otherEquation];
-                linkedVariables.erase(std::find(linkedVariables.begin(), linkedVariables.end(), tearingVariable));
+                otherEquation->mDependencies.push_back(tearingVariable->mVariable);
 
-                // Create a utilisation link from our other equation back to this variable.
-                utilisationMap[tearingVariable].push_back(otherEquation);
+                // Stop tracking the variable since it is now known.
+                otherEquation->mStateVariables.erase(std::remove(otherEquation->mStateVariables.begin(), otherEquation->mStateVariables.end(), tearingVariable), otherEquation->mStateVariables.end());
+                otherEquation->mVariables.erase(std::remove(otherEquation->mVariables.begin(), otherEquation->mVariables.end(), tearingVariable), otherEquation->mVariables.end());
             }
-            // Since the variable's causalisation has been defined, it no longer has any undefined edges.
+            // Since the variable's causalisation has been defined, it no longer has any unclassified edges.
             otherEquations.clear();
         }
     }

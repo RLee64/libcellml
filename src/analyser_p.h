@@ -273,10 +273,7 @@ public:
 
     void causaliseRelationship(const AnalyserInternalVariablePtr &variable,
                                const AnalyserInternalEquationPtr &equation,
-                               std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtrs> &unknownVariablesMap,
-                               std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> &unknownEquationsMap,
-                               std::map<AnalyserInternalEquationPtr, AnalyserInternalVariablePtr> &definitionMap,
-                               std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> &utilisationMap);
+                               std::map<AnalyserInternalVariablePtr, AnalyserInternalEquationPtrs> &unknownEquationsMap);
     void tearDaeSystem();
 
     void analyseModel(const ModelPtr &model);
