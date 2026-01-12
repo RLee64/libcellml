@@ -22,6 +22,7 @@ limitations under the License.
 
 #include <cmath>
 #include <iterator>
+#include <symengine/derivative.h>
 
 // clang-format off
 #include "symenginebegin.h"
@@ -204,7 +205,9 @@ bool AnalyserInternalEquation::variableOnLhsOrRhs(const AnalyserInternalVariable
            || variableOnRhs(variable);
 }
 
-SymEngineEquationResult AnalyserInternalEquation::symEngineEquation(const AnalyserEquationAstPtr &ast, const SymEngineSymbolMap &symbolMap)
+SymEngineEquationResult AnalyserInternalEquation::symEngineEquation(const AnalyserEquationAstPtr &ast,
+                                                                    SymEngineSymbolMap &symbolMap,
+                                                                    SymEngineVariableMap &variableMap)
 {
     // Make sure that we have an AST to convert.
 
@@ -212,12 +215,13 @@ SymEngineEquationResult AnalyserInternalEquation::symEngineEquation(const Analys
         return {true, SymEngine::null};
     }
 
-    // Recursively convert the left and right children.
+    // Recursively call getConvertedAst on left and right children.
 
     auto leftAst = ast->leftChild();
     auto rightAst = ast->rightChild();
-    auto [leftSuccess, left] = symEngineEquation(leftAst, symbolMap);
-    auto [rightSuccess, right] = symEngineEquation(rightAst, symbolMap);
+
+    auto [leftSuccess, left] = symEngineEquation(leftAst, symbolMap, variableMap);
+    auto [rightSuccess, right] = symEngineEquation(rightAst, symbolMap, variableMap);
 
     if (!leftSuccess || !rightSuccess) {
         return {false, SymEngine::null};
@@ -250,27 +254,115 @@ SymEngineEquationResult AnalyserInternalEquation::symEngineEquation(const Analys
         return {true, SymEngine::div(left, right)};
     case AnalyserEquationAst::Type::POWER:
         return {true, SymEngine::pow(left, right)};
+    case AnalyserEquationAst::Type::ROOT:
+        if (right == SymEngine::null) {
+            // Square root is expected.
+
+            return {true, SymEngine::pow(left, SymEngine::div(SymEngine::integer(1), SymEngine::integer(2)))};
+        } else {
+            // Left child will have been processed to directly hold the degree of the root.
+
+            return {true, SymEngine::pow(right, SymEngine::div(SymEngine::integer(1), left))};
+        }
+    case AnalyserEquationAst::Type::ABS:
+        return {true, SymEngine::abs(left)};
+    case AnalyserEquationAst::Type::EXP:
+        return {true, SymEngine::exp(left)};
+    case AnalyserEquationAst::Type::LOG:
+        if (right == SymEngine::null) {
+            // Base 10 logarithm is expected.
+            return {true, SymEngine::div(SymEngine::log(left), SymEngine::log(SymEngine::integer(10)))};
+        } else {
+            return {true, SymEngine::div(SymEngine::log(right), SymEngine::log(left))};
+        }
+    case AnalyserEquationAst::Type::LN:
+        return {true, SymEngine::log(left)};
+    case AnalyserEquationAst::Type::CEILING:
+        return {true, SymEngine::ceiling(left)};
+    case AnalyserEquationAst::Type::FLOOR:
+        return {true, SymEngine::floor(left)};
+    case AnalyserEquationAst::Type::MIN:
+        return {true, SymEngine::min({left, right})};
+    case AnalyserEquationAst::Type::MAX:
+        return {true, SymEngine::max({left, right})};
+    case AnalyserEquationAst::Type::REM:
+        return {true, SymEngine::function_symbol("mod", {left, right})};
+    case AnalyserEquationAst::Type::DIFF:
+        return {true, SymEngine::function_symbol("diff", {left, right})};
     case AnalyserEquationAst::Type::SIN:
         return {true, SymEngine::sin(left)};
     case AnalyserEquationAst::Type::COS:
         return {true, SymEngine::cos(left)};
     case AnalyserEquationAst::Type::TAN:
         return {true, SymEngine::tan(left)};
+    case AnalyserEquationAst::Type::SEC:
+        return {true, SymEngine::sec(left)};
+    case AnalyserEquationAst::Type::CSC:
+        return {true, SymEngine::csc(left)};
+    case AnalyserEquationAst::Type::COT:
+        return {true, SymEngine::cot(left)};
+    case AnalyserEquationAst::Type::SINH:
+        return {true, SymEngine::sinh(left)};
+    case AnalyserEquationAst::Type::COSH:
+        return {true, SymEngine::cosh(left)};
+    case AnalyserEquationAst::Type::TANH:
+        return {true, SymEngine::tanh(left)};
+    case AnalyserEquationAst::Type::SECH:
+        return {true, SymEngine::sech(left)};
+    case AnalyserEquationAst::Type::CSCH:
+        return {true, SymEngine::csch(left)};
+    case AnalyserEquationAst::Type::COTH:
+        return {true, SymEngine::coth(left)};
+    case AnalyserEquationAst::Type::ASIN:
+        return {true, SymEngine::asin(left)};
+    case AnalyserEquationAst::Type::ACOS:
+        return {true, SymEngine::acos(left)};
+    case AnalyserEquationAst::Type::ATAN:
+        return {true, SymEngine::atan(left)};
+    case AnalyserEquationAst::Type::ASEC:
+        return {true, SymEngine::asec(left)};
+    case AnalyserEquationAst::Type::ACSC:
+        return {true, SymEngine::acsc(left)};
+    case AnalyserEquationAst::Type::ACOT:
+        return {true, SymEngine::acot(left)};
+    case AnalyserEquationAst::Type::ASINH:
+        return {true, SymEngine::asinh(left)};
+    case AnalyserEquationAst::Type::ACOSH:
+        return {true, SymEngine::acosh(left)};
+    case AnalyserEquationAst::Type::ATANH:
+        return {true, SymEngine::atanh(left)};
+    case AnalyserEquationAst::Type::ASECH:
+        return {true, SymEngine::asech(left)};
+    case AnalyserEquationAst::Type::ACSCH:
+        return {true, SymEngine::acsch(left)};
+    case AnalyserEquationAst::Type::ACOTH:
+        return {true, SymEngine::acoth(left)};
+    case AnalyserEquationAst::Type::DEGREE:
+        // Parent should be ROOT so we can just return the left child.
+        return {true, left};
+    case AnalyserEquationAst::Type::LOGBASE:
+        // Parent should be LOG so we can just return the left child.
+        return {true, left};
+    case AnalyserEquationAst::Type::BVAR:
+        // Parent should be DIFF so we can just return the left child.
+        return {true, left};
     case AnalyserEquationAst::Type::E:
         return {true, SymEngine::E};
     case AnalyserEquationAst::Type::PI:
         return {true, SymEngine::pi};
     case AnalyserEquationAst::Type::INF:
         return {true, SymEngine::Inf};
-    case AnalyserEquationAst::Type::CI:
-        if (symbolMap.find(ast->variable()->name()) == symbolMap.end()) {
-            // The variable is not in our symbol map, so it is the VOI.
-            // TODO: Rayen to check whether anything should be done about the VOI.
+    case AnalyserEquationAst::Type::CI: {
+        auto variable = ast->variable();
+        if (symbolMap.find(variable->name()) == symbolMap.end()) {
+            // Variable is not currently in map, so it should be added.
 
-            return {false, SymEngine::null};
+            auto symbol = SymEngine::symbol(variable->name());
+            symbolMap[variable->name()] = symbol;
+            variableMap[symbol] = variable;
         }
-
-        return {true, symbolMap.at(ast->variable()->name())};
+        return {true, symbolMap.at(variable->name())};
+    }
     case AnalyserEquationAst::Type::CN: {
         // SymEngine distinguishes between integers and real numbers.
 
@@ -308,87 +400,234 @@ AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(const 
                                                                           const AnalyserEquationAstPtr &parentAst,
                                                                           const SymEngineVariableMap &variableMap)
 {
-    auto ast = AnalyserEquationAst::create();
+    // The headAst is the highest level ast for the converted seExpression and will be returned at the end.
+    // Comparatively, the currentAst is the ast we are presently populating.
+
+    auto headAst = AnalyserEquationAst::create();
+    auto currentAst = headAst;
     auto children = seExpression->get_args();
 
-    ast->setParent(parentAst);
+    headAst->setParent(parentAst);
 
     switch (seExpression->get_type_code()) {
-    case SymEngine::SYMENGINE_ADD:
-        ast->setType(AnalyserEquationAst::Type::PLUS);
+    case SymEngine::SYMENGINE_EQUALITY:
+        currentAst->setType(AnalyserEquationAst::Type::EQUALITY);
 
         break;
-    case SymEngine::SYMENGINE_MUL:
+    case SymEngine::SYMENGINE_ADD:
+        currentAst->setType(AnalyserEquationAst::Type::PLUS);
+
+        break;
+    case SymEngine::SYMENGINE_MUL: {
         if (SymEngine::eq(*(children[0]), *SymEngine::integer(-1))) {
             // Convert -1 * x to -x.
 
-            ast->setType(AnalyserEquationAst::Type::MINUS);
-
+            currentAst->setType(AnalyserEquationAst::Type::MINUS);
             children.erase(children.begin());
+
+            if (children.size() > 1) {
+                // Multiple terms being multiplied, e.g. -1 * x * y.
+                // Retrieve the unary minus as a parent node and process the rest as a TIMES node.
+                auto newAst = AnalyserEquationAst::create();
+
+                newAst->setType(AnalyserEquationAst::Type::TIMES);
+                newAst->setParent(currentAst);
+                currentAst->setLeftChild(newAst);
+
+                currentAst = newAst;
+            }
         } else {
-            ast->setType(AnalyserEquationAst::Type::TIMES);
+            currentAst->setType(AnalyserEquationAst::Type::TIMES);
         }
 
         break;
+    }
     case SymEngine::SYMENGINE_POW:
-        ast->setType(AnalyserEquationAst::Type::POWER);
+        currentAst->setType(AnalyserEquationAst::Type::POWER);
+
+        break;
+    case SymEngine::SYMENGINE_ABS:
+        currentAst->setType(AnalyserEquationAst::Type::ABS);
+
+        break;
+    case SymEngine::SYMENGINE_LOG:
+        currentAst->setType(AnalyserEquationAst::Type::LN);
+
+        break;
+    case SymEngine::SYMENGINE_CEILING:
+        currentAst->setType(AnalyserEquationAst::Type::CEILING);
+
+        break;
+    case SymEngine::SYMENGINE_FLOOR:
+        currentAst->setType(AnalyserEquationAst::Type::FLOOR);
+
+        break;
+    case SymEngine::SYMENGINE_MIN:
+        currentAst->setType(AnalyserEquationAst::Type::MIN);
+
+        break;
+    case SymEngine::SYMENGINE_MAX:
+        currentAst->setType(AnalyserEquationAst::Type::MAX);
 
         break;
     case SymEngine::SYMENGINE_SIN:
-        ast->setType(AnalyserEquationAst::Type::SIN);
+        currentAst->setType(AnalyserEquationAst::Type::SIN);
 
         break;
     case SymEngine::SYMENGINE_COS:
-        ast->setType(AnalyserEquationAst::Type::COS);
+        currentAst->setType(AnalyserEquationAst::Type::COS);
 
         break;
     case SymEngine::SYMENGINE_TAN:
-        ast->setType(AnalyserEquationAst::Type::TAN);
+        currentAst->setType(AnalyserEquationAst::Type::TAN);
 
         break;
-    case SymEngine::SYMENGINE_SYMBOL:
-        ast->setType(AnalyserEquationAst::Type::CI);
-        ast->setVariable(variableMap.at(SymEngine::rcp_dynamic_cast<const SymEngine::Symbol>(seExpression))->mVariable);
+    case SymEngine::SYMENGINE_SEC:
+        currentAst->setType(AnalyserEquationAst::Type::SEC);
 
         break;
-    case SymEngine::SYMENGINE_INTEGER:
-    case SymEngine::SYMENGINE_REAL_DOUBLE:
-        ast->setType(AnalyserEquationAst::Type::CN);
-        ast->setValue(seExpression->__str__());
+    case SymEngine::SYMENGINE_CSC:
+        currentAst->setType(AnalyserEquationAst::Type::CSC);
 
         break;
-    case SymEngine::SYMENGINE_RATIONAL: {
-        auto rational = SymEngine::rcp_dynamic_cast<const SymEngine::Rational>(seExpression);
+    case SymEngine::SYMENGINE_COT:
+        currentAst->setType(AnalyserEquationAst::Type::COT);
 
-        ast->setType(AnalyserEquationAst::Type::DIVIDE);
+        break;
+    case SymEngine::SYMENGINE_SINH:
+        currentAst->setType(AnalyserEquationAst::Type::SINH);
 
-        children.clear();
-        children.push_back(rational->get_num());
-        children.push_back(rational->get_den());
+        break;
+    case SymEngine::SYMENGINE_COSH:
+        currentAst->setType(AnalyserEquationAst::Type::COSH);
+
+        break;
+    case SymEngine::SYMENGINE_TANH:
+        currentAst->setType(AnalyserEquationAst::Type::TANH);
+
+        break;
+    case SymEngine::SYMENGINE_SECH:
+        currentAst->setType(AnalyserEquationAst::Type::SECH);
+
+        break;
+    case SymEngine::SYMENGINE_CSCH:
+        currentAst->setType(AnalyserEquationAst::Type::CSCH);
+
+        break;
+    case SymEngine::SYMENGINE_COTH:
+        currentAst->setType(AnalyserEquationAst::Type::COTH);
+
+        break;
+    case SymEngine::SYMENGINE_ASIN:
+        currentAst->setType(AnalyserEquationAst::Type::ASIN);
+
+        break;
+    case SymEngine::SYMENGINE_ACOS:
+        currentAst->setType(AnalyserEquationAst::Type::ACOS);
+
+        break;
+    case SymEngine::SYMENGINE_ATAN:
+        currentAst->setType(AnalyserEquationAst::Type::ATAN);
+
+        break;
+    case SymEngine::SYMENGINE_ASEC:
+        currentAst->setType(AnalyserEquationAst::Type::ASEC);
+
+        break;
+    case SymEngine::SYMENGINE_ACSC:
+        currentAst->setType(AnalyserEquationAst::Type::ACSC);
+
+        break;
+    case SymEngine::SYMENGINE_ACOT:
+        currentAst->setType(AnalyserEquationAst::Type::ACOT);
+
+        break;
+    case SymEngine::SYMENGINE_ASINH:
+        currentAst->setType(AnalyserEquationAst::Type::ASINH);
+
+        break;
+    case SymEngine::SYMENGINE_ACOSH:
+        currentAst->setType(AnalyserEquationAst::Type::ACOSH);
+
+        break;
+    case SymEngine::SYMENGINE_ATANH:
+        currentAst->setType(AnalyserEquationAst::Type::ATANH);
+
+        break;
+    case SymEngine::SYMENGINE_ASECH:
+        currentAst->setType(AnalyserEquationAst::Type::ASECH);
+
+        break;
+    case SymEngine::SYMENGINE_ACSCH:
+        currentAst->setType(AnalyserEquationAst::Type::ACSCH);
+
+        break;
+    case SymEngine::SYMENGINE_ACOTH:
+        currentAst->setType(AnalyserEquationAst::Type::ACOTH);
+
+        break;
+    case SymEngine::SYMENGINE_SYMBOL: {
+        auto symbol = SymEngine::rcp_dynamic_cast<const SymEngine::Symbol>(seExpression);
+        currentAst->setType(AnalyserEquationAst::Type::CI);
+        currentAst->setVariable(variableMap.at(symbol));
 
         break;
     }
+    case SymEngine::SYMENGINE_INTEGER:
+    case SymEngine::SYMENGINE_RATIONAL:
+    case SymEngine::SYMENGINE_REAL_MPFR:
+    case SymEngine::SYMENGINE_REAL_DOUBLE:
+        currentAst->setType(AnalyserEquationAst::Type::CN);
+        currentAst->setValue(seExpression->__str__());
+
+        break;
     case SymEngine::SYMENGINE_CONSTANT:
         // It must be either e or π.
 
         if (SymEngine::eq(*SymEngine::rcp_dynamic_cast<const SymEngine::Constant>(seExpression), *SymEngine::E)) {
-            ast->setType(AnalyserEquationAst::Type::E);
+            currentAst->setType(AnalyserEquationAst::Type::E);
         } else {
-            ast->setType(AnalyserEquationAst::Type::PI);
+            currentAst->setType(AnalyserEquationAst::Type::PI);
         }
 
         break;
-    default:
-        // The only case left should be SymEngine::SYMENGINE_INFTY.
+    case SymEngine::SYMENGINE_INFTY:
+        currentAst->setType(AnalyserEquationAst::Type::INF);
+        break;
+    default: {
+        // The only case left should be SymEngine::SYMENGINE_FUNCTIONSYMBOL.
 
-        ast->setType(AnalyserEquationAst::Type::INF);
+        auto functionName = SymEngine::rcp_dynamic_cast<const SymEngine::FunctionSymbol>(seExpression)->get_name();
+
+        if (functionName == "diff") {
+            currentAst->setType(AnalyserEquationAst::Type::DIFF);
+
+            // This is a special case where we need to manually wrap the left child in a BVAR node.
+
+            auto bVarAst = AnalyserEquationAst::create();
+
+            bVarAst->setType(AnalyserEquationAst::Type::BVAR);
+            bVarAst->setParent(currentAst);
+            currentAst->setLeftChild(bVarAst);
+            bVarAst->setLeftChild(parseSymEngineExpression(children[0], bVarAst, variableMap));
+
+            // We must also set the right child here, since the the loop below doesn't know we've ready
+            // set the left child.
+
+            currentAst->setRightChild(parseSymEngineExpression(children[1], currentAst, variableMap));
+
+            return headAst;
+        } else {
+            // Must be a modulo function symbol.
+
+            currentAst->setType(AnalyserEquationAst::Type::REM);
+        }
 
         break;
     }
+    }
 
-    // All children (except the last) are guaranteed to be left children in the AST.
-
-    auto currentAst = ast;
+    // All children (except the last) are guaranteed to be left children in the AST tree.
 
     for (size_t i = 0; i + 1 < children.size(); ++i) {
         auto childAst = parseSymEngineExpression(children[i], currentAst, variableMap);
@@ -401,9 +640,9 @@ AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(const 
             auto newAst = AnalyserEquationAst::create();
 
             newAst->setParent(currentAst);
-            newAst->setType(ast->type());
-            newAst->setValue(ast->value());
-            newAst->setVariable(ast->variable());
+            newAst->setType(currentAst->type());
+            newAst->setValue(currentAst->value());
+            newAst->setVariable(currentAst->variable());
 
             currentAst->setRightChild(newAst);
 
@@ -442,31 +681,49 @@ AnalyserEquationAstPtr AnalyserInternalEquation::parseSymEngineExpression(const 
         }
     }
 
-    return ast;
+    return headAst;
 }
 
 AnalyserEquationAstPtr AnalyserInternalEquation::rearrangeFor(const AnalyserInternalVariablePtr &variable)
 {
+    // These are to be dynamically populated while converting the AST to a SymEngine expression.
     SymEngineSymbolMap symbolMap;
     SymEngineVariableMap variableMap;
 
-    for (const auto &aVariable : mAllVariables) {
-        auto symbol = SymEngine::symbol(aVariable->mVariable->name());
-
-        symbolMap[aVariable->mVariable->name()] = symbol;
-        variableMap[symbol] = aVariable;
-    }
-
-    auto [success, seEquation] = symEngineEquation(mAst, symbolMap);
+    auto [success, seEquation] = symEngineEquation(mAst, symbolMap, variableMap);
 
     if (!success) {
         return nullptr;
     }
 
-    // Attempt to isolate a single real solution.
+    // In most cases the variable we want to rearrange for will already be in the map.
+    // However, if the variable is mapped to an imported equation we might also need to check its equivalent variables.
 
-    auto solutionSet = solve(seEquation, symbolMap[variable->mVariable->name()]);
-    auto solutions = solutionSet->get_args();
+    auto targetSymbol = symbolMap[variable->mVariable->name()];
+    if (targetSymbol.is_null()) {
+        for (size_t i = 0; i < variable->mVariable->equivalentVariableCount(); ++i) {
+            auto equivalentVariable = variable->mVariable->equivalentVariable(i);
+            targetSymbol = symbolMap[equivalentVariable->name()];
+            if (!targetSymbol.is_null()) {
+                break;
+            }
+        }
+    }
+
+    SymEngine::RCP<const SymEngine::Set> solutionSet;
+
+    try {
+        solutionSet = solve(seEquation, targetSymbol);
+    } catch (const SymEngine::SymEngineException &) {
+        // SymEngine failed to solve the equation. This is likely because to the variable we're trying
+        // to solve for is nested within a function that SymEngine cannot invert (e.g. sin, log, etc).
+
+        return nullptr;
+    }
+
+    SymEngine::vec_basic solutions = solutionSet->get_args();
+
+    // Attempt to isolate a single real solution.
 
     solutions.erase(std::remove_if(solutions.begin(), solutions.end(),
                                    [this](const SymEngine::RCP<const SymEngine::Basic> &solution) {
@@ -474,12 +731,9 @@ AnalyserEquationAstPtr AnalyserInternalEquation::rearrangeFor(const AnalyserInte
                                    }),
                     solutions.end());
 
-    // TODO: Rayen to come up with a test that has more than one real solution.
-    /*
     if (solutions.size() != 1) {
         return nullptr;
     }
-    */
 
     // Rebuild the AST from the rearranged expression.
 
