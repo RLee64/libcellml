@@ -22,12 +22,6 @@ limitations under the License.
 #include "logger_p.h"
 #include "utilities.h"
 
-namespace SymEngine {
-template<class T> class RCP;
-class Basic;
-class Symbol;
-} // namespace SymEngine
-
 namespace libcellml {
 
 struct AnalyserInternalEquation;
@@ -45,8 +39,10 @@ using AnalyserEquationPtrs = std::vector<AnalyserEquationPtr>;
 using AnalyserVariablePtrs = std::vector<AnalyserVariablePtr>;
 using AnalyserExternalVariablePtrs = std::vector<AnalyserExternalVariablePtr>;
 
+using AnalyserEquationAstPtrs = std::vector<AnalyserEquationAstPtr>;
+
 using SymEngineVariableMap = std::map<SymEngine::RCP<const SymEngine::Symbol>, AnalyserInternalVariablePtr, SymEngine::RCPBasicKeyLess>;
-using SymEngineSymbolMap = std::map<std::string, SymEngine::RCP<const SymEngine::Symbol>>;
+using SymEngineSymbolMap = std::map<AnalyserInternalVariablePtr, SymEngine::RCP<const SymEngine::Symbol>>;
 using SymEngineEquationResult = std::tuple<bool, SymEngine::RCP<const SymEngine::Basic>>;
 
 struct AnalyserInternalVariable
@@ -73,7 +69,10 @@ struct AnalyserInternalVariable
 
     VariablePtr mInitialisingVariable;
     VariablePtr mVariable;
-    VariablePtrs mDependencies;
+
+    AnalyserInternalVariablePtrs mDependencies;
+    AnalyserInternalEquationPtrs mUnmatchedEquations;
+    AnalyserInternalEquationPtr mMatchedEquation;
 
     static AnalyserInternalVariablePtr create(const VariablePtr &variable);
 
@@ -99,16 +98,17 @@ struct AnalyserInternalEquation
 
     Type mType = Type::UNKNOWN;
 
-    VariablePtrs mDependencies;
-
     AnalyserEquationAstPtr mAst;
 
     ComponentPtr mComponent;
 
+    AnalyserInternalVariablePtrs mDependencies;
     AnalyserInternalVariablePtrs mVariables;
     AnalyserInternalVariablePtrs mStateVariables;
     AnalyserInternalVariablePtrs mAllVariables;
     AnalyserInternalVariablePtrs mUnknownVariables;
+
+    SymEngine::RCP<const SymEngine::Basic> mSeEquation;
 
     size_t mNlaSystemIndex = MAX_SIZE_T;
     AnalyserInternalEquationWeakPtrs mNlaSiblings;
@@ -133,17 +133,15 @@ struct AnalyserInternalEquation
     static bool hasNonConstantVariables(const AnalyserInternalVariablePtrs &variables);
     bool hasNonConstantVariables();
 
-    bool variableOnLhsRhs(const AnalyserInternalVariablePtr &variable,
+    bool containsVariable(const AnalyserInternalVariablePtr &variable,
                           const AnalyserEquationAstPtr &astChild);
-    bool variableOnRhs(const AnalyserInternalVariablePtr &variable);
-    bool variableOnLhsOrRhs(const AnalyserInternalVariablePtr &variable);
+    bool isVariable(const AnalyserInternalVariablePtr &variable,
+                    const AnalyserEquationAstPtr &astChild);
+    bool variableIsolated(const AnalyserInternalVariablePtr &variable);
 
-    SymEngineEquationResult symEngineEquation(const AnalyserEquationAstPtr &ast, const SymEngineSymbolMap &symbolMap);
+    void simplifySeEquation();
     bool isSymEngineExpressionComplex(const SymEngine::RCP<const SymEngine::Basic> &seExpression);
-    AnalyserEquationAstPtr parseSymEngineExpression(const SymEngine::RCP<const SymEngine::Basic> &seExpression, const AnalyserEquationAstPtr &parentAst, const SymEngineVariableMap &variableMap);
-    AnalyserEquationAstPtr rearrangeFor(const AnalyserInternalVariablePtr &variable);
-
-    bool check(const AnalyserModelPtr &analyserModel, bool checkNlaSystems);
+    SymEngine::RCP<const SymEngine::Basic> rearrangeFor(const SymEngine::RCP<const SymEngine::Symbol> &symbol);
 };
 
 /**
@@ -176,6 +174,11 @@ public:
 
     AnalyserInternalVariablePtrs mInternalVariables;
     AnalyserInternalEquationPtrs mInternalEquations;
+
+    SymEngineSymbolMap mSymbolMap;
+    SymEngineVariableMap mVariableMap;
+    AnalyserInternalVariablePtrs mFirstVariables;
+    AnalyserInternalVariablePtrs mLastVariables;
 
     GeneratorProfilePtr mGeneratorProfile = GeneratorProfile::create();
 
@@ -270,6 +273,19 @@ public:
 
     void addInvalidVariableIssue(const AnalyserInternalVariablePtr &variable,
                                  Issue::ReferenceRule referenceRule);
+
+    SymEngineEquationResult parseAstToSymEngine(const AnalyserEquationAstPtr &ast);
+    AnalyserEquationAstPtr parseSymEngineToAst(const SymEngine::RCP<const SymEngine::Basic> &seExpression,
+                                               const AnalyserEquationAstPtr &parentAst);
+    void replaceAstTree(const AnalyserInternalEquationPtr &equation, const AnalyserEquationAstPtr &newAst);
+
+    void initialiseMatching(const AnalyserInternalEquationPtrs &equations, const AnalyserInternalVariablePtrs &variables);
+    void makeVariableKnown(const AnalyserInternalVariablePtr &variable, const AnalyserInternalEquationPtr &matchedEquation);
+    bool matchPair(const AnalyserInternalVariablePtr &variable, const AnalyserInternalEquationPtr &equation);
+    void matchSystem(AnalyserInternalVariablePtrs &unknownVariables,
+                     AnalyserInternalEquationPtrs &unknownEquations,
+                     bool externalsInitialised);
+    void classifyInternalSystem();
 
     void analyseModel(const ModelPtr &model);
 
